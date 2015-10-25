@@ -44,6 +44,27 @@ int continuous_count (char* p){
     return count;
 }
 
+int check_loops(char *p,int *index,int *mult){
+    int res,offset = 0,_index = 0;
+    if(*(p+1) != '-') return -1;
+    p += 2;
+    while( *p != ']' ){
+        if( *p == '[' || *p == '-' || *p == '.' || *p == ',' )
+            return -1; 
+        res = continuous_count(p);
+        if( *p == '>' ) offset += res;
+        else if( *p == '<' ) offset -= res;
+        else if( *p == '+' ){
+            index[_index] = offset;
+            mult[_index] = res;
+            _index++;
+        }
+        p += res;
+    }
+    if( offset != 0 ) return -1;
+    return _index;
+}
+
 int main(int argc, char *argv[])
 {
 	if (argc < 2) err("Usage: jit-x64 <inputfile>");
@@ -53,7 +74,7 @@ int main(int argc, char *argv[])
 	unsigned int maxpc = 0;
 	int pcstack[MAX_NESTING];
 	int *top = pcstack, *limit = pcstack + MAX_NESTING;
-	int res;
+	int copy_index[10],copy_mult[10],res,i,j;
 	
 	// Function prologue.
 	|  push PTR
@@ -107,6 +128,19 @@ int main(int argc, char *argv[])
 			// Each loop gets two pclabels: at the beginning and end.
 			// We store pclabel offsets in a stack to link the loop
 			// begin and end together.
+			
+			res = check_loops(p,copy_index,copy_mult);
+			if(res != -1){	
+				|mov cl,byte[PTR]
+				for(i=0;i<res;i++){
+					for(j=0;j<copy_mult[i];j++){
+						|	add byte[PTR+copy_index[i]], cl
+					}
+				}
+				|mov byte[PTR], 0
+				while(*p!=']') p++;
+				break;
+			}
 
 			maxpc += 2;
 			*top++ = maxpc;
